@@ -8,57 +8,61 @@
 
 #include <Wire.h>
 #define EEPROM_ADDR 0x50 // Endereço da memória EEPROM 24C16
+
 /* Configuracao da comunicacao serial. */
 void setup(void)  {
   Serial.begin(9600); // Set baud rate
   Wire.begin(); // Join I2C bus
 }
 
-
-// Escrita de um byte na memoria 
+/* Escrita de um byte na memoria */
 void escrever(unsigned int add, unsigned char dado){
-  int enderecoEEPROM = 0b1010000;
 
-  //byte menos significativo do endereço da memoria
-  unsigned char byteLstAdd = (unsigned char)add; 
-  
-  //byte mais significativo do endereço da memória
+  /* Desloca 8 bits a direita para separar os 3 bits mais significativos do endereço */
   unsigned int byteMstAdd = add>>8;
+
+  /* byte menos significativo do endereço da memoria */
+  unsigned char byteLstAdd = (unsigned char)add;
+
+  /* Atribuição de uma mascara para juntar os bits do endereço da 
+  EEPROM com os 3 primeiros bits do endereço do dado */  
+  int primeiroByteTransmitido = (EEPROM_ADDR |byteMstAdd);
   
-  
-  int primeiroByteTransmitido = (enderecoEEPROM |byteMstAdd);
-  
-  Serial.println(primeiroByteTransmitido, BIN);
-  Wire.beginTransmission(primeiroByteTransmitido); // Inicio de transmissao entre o arduino e a memória, add de address, endereço da memoria
-  //Wire.write(byteMstAdd); //byte mais significativo do endereço
-  //Serial.println(byteMstAdd, BIN);  
-  Wire.write(byteLstAdd);
-  //Serial.println(byteLstAdd, BIN);  
-  Wire.write(dado); // dados que vao ser salvos na memória, no endereço acima 
-  //Serial.println(dado, BIN);
-  Wire.endTransmission(); // Realiza a transmissao do dado
+  /* Processo de escrita do byte dado na EEPROM no endereço add */
+  Wire.beginTransmission(primeiroByteTransmitido);
+  Wire.write(byteLstAdd); 
+  Wire.write(dado); 
+  Wire.endTransmission();
 }
 
 unsigned char ler(unsigned int add){
-  byte data = 0;
-  unsigned int byteMstAdd = add>>8;  
-  int primeiroByteTransmitido = (EEPROM_ADDR |byteMstAdd);
+  
+  /* Desloca 8 bits a direita para separar os 3 bits mais significativos do endereço */  
+  unsigned int byteMstAdd = add >> 8;
+
+  /* byte menos significativo do endereço da memoria */
+  unsigned int byteLstAdd = (unsigned char) add;
+
+  /* Atribuição de uma mascara para juntar os bits do endereço da 
+  EEPROM com os 3 primeiros bits do endereço do dado */
+  int primeiroByteTransmitido = (EEPROM_ADDR | byteMstAdd); 
+
+  /* Escrita com o objetivo de escolher o endereço a ser lido */
   Wire.beginTransmission(primeiroByteTransmitido); // Inicia a transmissão para o endereço da memória
-  byteLstAdd = (unsigned char)add
-  Wire.write(byteLstAdd); // Escreve o byte de endereço de alta
-  Wire.endTransmission(); // Finaliza a transmissão
+  Wire.write(byteLstAdd); // Escreve o byte restante de endereço de memoria
+  Wire.endTransmission(); // Executa a transmissão
+  Wire.requestFrom(primeiroByteTransmitido, 1); // Solicita 1 byte de dados da memória
 
-  Wire.requestFrom(EEPROM_ADDR, 1); // Solicita 1 byte de dados da memória
-
-  if (Wire.available()) {
-    data = Wire.read(); // Lê o byte de dados recebido da memória
-    //Serial.println(data, BIN);
-  }
-
+  byte data = Wire.read();
+  
   return data;
 }
 
 void loop(){
-  escrever(0x2EF,0xFF);
-  ler(0x2EF);
+  escrever(0x20F, 0xF3);
+  delay(5);
+  ler(0x20F);
+  
+  /* Delay com objetivo de segurar o loop e analisar apenas a primeira iteracao */
+  delay(10000000);
 }

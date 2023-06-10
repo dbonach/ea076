@@ -30,7 +30,7 @@ Pin relation:
 
 */
 #include <Arduino.h>
-
+#include <avr/interrupt.h>
 /* Create variables */
 int columns[3] = {1, 1, 1};
 int activeLine;

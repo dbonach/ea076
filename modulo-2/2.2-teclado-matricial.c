@@ -105,7 +105,7 @@ void loop() {
             activeLine = row;
             break;
             
-        } else if (row == ROWS - 1) {           // caso nao encontrou linha ativa
+        } else if (row == ROWS - 1) {   // caso nao encontrou linha ativa ao final da varredura
             activeLine = NO_ACTIVE_LINE;
         }
     }

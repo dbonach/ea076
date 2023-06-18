@@ -7,6 +7,7 @@
 */
 
 #include <Arduino.h>
+#include <LiquidCrystal.h>
 
 // definicao de constantes
 #define ROWS 4
@@ -19,7 +20,7 @@
 const char rowPins[ROWS] = {2, 3, 4, 5};
 const char colPins[COLS] = {6, 7, 8};
 
-// mapeamento do teclado para obtencao das teclas
+// mapeamento do teclado para obtencao das teclas acionadas
 char keypad[ROWS][COLS] = {
   {'1', '2', '3'},
   {'4', '5', '6'},
@@ -27,10 +28,20 @@ char keypad[ROWS][COLS] = {
   {'*', '0', '#'}
 };
 
+// configuracao display LCD
+int RS = 19;
+int E = 18;
+int D4 = 17;
+int D5 = 16;
+int D6 = 15;
+int D7 = 14;
+
+LiquidCrystal lcd(RS, E, D4, D5, D6, D7);
+
 // declaracao de variaveis globais
 char activeColumn = 0;
-char activeLine = NO_ACTIVE_LINE;
-char lastActiveLine = NO_ACTIVE_LINE;
+char currentLine = NO_ACTIVE_LINE;
+char previousLine = NO_ACTIVE_LINE;
 char debouncedLine = NO_ACTIVE_LINE;
 
 // configuracao do timer1 para gerar uma interrupcao a cada 50ms
@@ -57,6 +68,7 @@ void setup()
     cli();
 
     Serial.begin(9600); // set baud rate to 9600 bps
+    lcd.begin(16,2); // configura a instancia de lcd como 16x2
 
     // mapeamento dos pinos correspondentes a linha e colunas do teclado
     // colunas sao configuradas como saida e linhas como entrada com pull-up
@@ -77,6 +89,12 @@ void setup()
     /* configura o timer1 para gerar interrupcoes a cada 50ms 
        que serao utilizadas para validar o acionamento das teclas */
     configuracao_Timer1();
+
+    // exibe mensagem inicia no display LCD e no monitor serial
+    Serial.println("Waiting for key to be pressed.");
+    lcd.print("Waiting for key");
+    lcd.setCursor(0, 1);
+    lcd.print("to be pressed...");
     
     // habilita a flag global de interrupcao
     sei();
@@ -86,9 +104,10 @@ void loop() {
     /* Funcionamento do loop de varredura:
 
         A cada iteracao do loop uma coluna eh colocada em nivel baixo e as linhas sao varridas.
-    Caso uma linha seja encontrada em nivel baixo, a variavel activeLine armazena a linha ativa 
-    e o fluxo eh quebrado para evitar que a a variavel activeLine seja marcada como NO_ACTIVE_LINE.
-    Caso nenhuma linha seja encontrada em nivel baixo, a variavel activeLine eh marcada como NO_ACTIVE_LINE.
+    O acionamento de uma tecla faz com que a linha feche contato com a coluna assim ela passa para
+    nivel baixo, assim caso uma linha seja encontrada em nivel baixo esta é a linha acionada.
+    No if interno ao loop a variavel currentLine armazena o estado da linha, sendo ela uma linha
+    valida ou o não acionamento caso nenhuma linha seja encontrada em nivel baixo.
         Apos a varredura das linhas, a coluna eh colocada em nivel alto e eh validado se a proxima
     coluna deve ser varrida.
         Caso tenha encontrado uma linha ativa a varredura continua na mesma coluna para realizar o 
@@ -102,18 +121,18 @@ void loop() {
     for (int row = 0; row < ROWS ; row++) {     // linhas sao varridas
 
         if (digitalRead(rowPins[row]) == LOW) { // caso encontrou linha ativa
-            activeLine = row;
+            currentLine = row;
             break;
             
         } else if (row == ROWS - 1) {   // caso nao encontrou linha ativa ao final da varredura
-            activeLine = NO_ACTIVE_LINE;
+            currentLine = NO_ACTIVE_LINE;
         }
     }
 
     digitalWrite(colPins[activeColumn], HIGH);  // coluna eh colocada em nivel alto
 
     // atualiza a coluna caso nao tenha encontrado nenhuma linha ativa e nao esteja em debounce
-    if (activeLine == NO_ACTIVE_LINE && debouncedLine == NO_ACTIVE_LINE) {
+    if (currentLine == NO_ACTIVE_LINE && debouncedLine == NO_ACTIVE_LINE) {
         updateColumn();
     }
 }
@@ -121,36 +140,56 @@ void loop() {
 ISR(TIMER1_COMPA_vect) {
     /* Funcionamento do vetor de interrupcao:
     
-        Toda vez que o fluxo passa pelo vetor, o estado da ultima linha ativa eh salvo.
-    Assim eh possivel comparar o par de estados (linha ativa atual e ultima linha ativa) 
-    para fazer o debounce de acionamento e desacionamento da tecla.
-        O primeiro if verifica se no intervalo de 50ms uma linha foi acionada consecutivamente.
-    Isto sendo verdadeiro a variavel debouncedLine salva a linha que foi validada forcando o
-    fluxo entrar no segundo if nas proximas iteracoes, onde eh avaliado se no intervalo de 50ms 
-    as linhas estavam desativadas consecutivamente, ou seja, se a tecla foi solta. 
-    
+        Toda vez que o fluxo passa pelo vetor, o estado da ultima linha ativa ou nao eh salvo.
+    Assim eh possivel comparar o par de estados (valor da linha atual e anterior) no 
+    intervalo de 50ms para fazer o debounce de acionamento e desacionamento da tecla.
+        O if externo garante que estamos analisando uma mesma linha acionada no intervalo
+    de 50ms ou o nao acionamento, pois em ambos os casos precisamos do mesmo estado da linha
+    consecutivamente.
+        Dentro do if, o primeiro if garante que estamos analisando uma linha acionada e que 
+    nao estamos no fluxo de debounce do desacionamento, dentro do if a variavel debouncedLine 
+    vai ser atribuida com o valor da linha acionada, esta mesma variavel eh utilizada para o 
+    else if seguinte que verifica se a tecla foi solta.
+        O else if valida se a linha esta desacionada, pois no intervalo de 50ms 
+    teremos o par de nenhuma linha ativa e a variavel debounceLine tera o valor de uma linha
+    valida, indicando que estamos realizando o debounce de desacionamento da tecla.
+
     */
 
-    if (activeLine == lastActiveLine && activeLine != NO_ACTIVE_LINE && debouncedLine == NO_ACTIVE_LINE) {
+    // no intervalo de 50ms as mesmas linhas estavam ativadas ou desativadas
+    if (currentLine == previousLine) {
 
-            debouncedLine = activeLine;
+        // as linhas eram validas e nao estava sendo feito debounce de desacionamento
+        if (currentLine != NO_ACTIVE_LINE && debouncedLine == NO_ACTIVE_LINE) {
 
-    } else if (activeLine == lastActiveLine && activeLine == NO_ACTIVE_LINE && debouncedLine != NO_ACTIVE_LINE) {
+            debouncedLine = currentLine; // salva a linha que foi feito debounce de acionamento
 
-        char pressedKey = keypad[debouncedLine][activeColumn];
-        Serial.println("Pressed key: " + String(pressedKey));
+        // este eh o debounce de desacionamento
+        // as linhas eram nulas e debouncedLine indica que ja foi feito o debounce de acionamento, logo o ciclo foi completo
+        } else if (currentLine == NO_ACTIVE_LINE && debouncedLine != NO_ACTIVE_LINE) {
 
-        debouncedLine = NO_ACTIVE_LINE;
+            char pressedKey = keypad[debouncedLine][activeColumn];
+            Serial.println("Pressed key: " + String(pressedKey));
+            showInDisplay("Pressed key: " + String(pressedKey));
+
+            debouncedLine = NO_ACTIVE_LINE;
+        }
     }
 
-    lastActiveLine = activeLine;
+    previousLine = currentLine;
 }
 
-// atualiza coluna ativa, variando de 0 a 2
+// atualiza coluna sendo varrida, variando de 0 a 2
 void updateColumn() {
     activeColumn++;
 
     if (activeColumn >= COLS) {
         activeColumn = 0;
     }
+}
+
+// envia mensagem para o display lcd
+void showInDisplay(String phrase) {
+    lcd.clear();
+    lcd.print(phrase);
 }

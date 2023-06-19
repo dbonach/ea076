@@ -1,0 +1,73 @@
+
+/* Macro de clock do microcontrolador */
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <LiquidCrystal.h>
+#include <Wire.h>
+
+/* Definicao do endereco do PCF a ser utilizado */
+#define ADDRESS 32 // 00100000b == 32d
+
+// Definir o pino de entrada analógica onde o sensor está conectado
+const int pinoSensor = A0;
+
+void setup() {
+  // Inicializar a comunicação serial
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Ler o valor analógico do sensor
+  int valorSensor = analogRead(pinoSensor);
+
+  // Converter o valor analógico para temperatura em graus Celsius
+  float tensao = valorSensor * (5.0 / 1023.0);  // Converter o valor para tensão (0-5V)
+  float temperatura = tensao * 100;  // Cada 10mV de variação corresponde a 1°C
+
+  // Exibir a temperatura no Monitor Serial
+  Serial.print("Temperatura: ");
+  Serial.print(temperatura);
+  Serial.println(" °C");
+
+  // Aguardar um segundo antes de fazer a próxima leitura
+  delay(1000);
+
+
+  sendRpmTo4DigitDisplay(temperatura);  
+}
+/* Send temperature to 4-digit display */
+void sendRpmTo4DigitDisplay(int number) {
+    encodeDigit3(number / 1000);
+    encodeDigit2(number % 1000 / 100);
+    encodeDigit1(number % 1000 % 100 / 10);
+    encodeDigit0(number % 1000 % 100 % 10);
+}
+
+/* Encode units (less valuable) */
+void encodeDigit0(int number) {
+    sendDigit(112 | number); // 1110000 OR number
+}
+
+/* Encode tens */
+void encodeDigit1(int number) {
+    sendDigit(176 | number); // 11010000 OR number
+}
+
+/* Encode hundreds */
+void encodeDigit2(int number) {
+    sendDigit(208 | number); // 10110000 OR number
+}
+
+/* Encode thousands (more valuable) */
+void encodeDigit3(int number) {
+    sendDigit(224 | number); // 01110000 OR number
+}
+
+/* Send encoded values through I2C bus */
+void sendDigit(int value) {
+    Wire.beginTransmission(ADDRESS); // Inicio de transmissao entre o arduino e o PCF de endereco 0100000b
+    Wire.write(value); // Prepara os bits (value) a serem transmitidos 
+    Wire.endTransmission(); // Realiza a transmissao do dado
+}

@@ -8,7 +8,61 @@
 
 #include <Wire.h>
 #define EEPROM_ADDR 0x50 // Endereço da memória EEPROM 24C16
+#include <Arduino.h>
+#include <LiquidCrystal.h>
 
+// definicao de constantes
+#define ROWS 4
+#define COLS 3
+#define NO_ACTIVE_LINE 100
+#define TRUE 1
+#define FALSE 0
+
+// arrays que mapeiam os pinos do arduino para as linhas e colunas do teclado
+const char rowPins[ROWS] = {2, 3, 4, 5};
+const char colPins[COLS] = {6, 7, 8};
+
+// mapeamento do teclado para obtencao das teclas acionadas
+char keypad[ROWS][COLS] = {
+  {'1', '2', '3'},
+  {'4', '5', '6'},
+  {'7', '8', '9'},
+  {'*', '0', '#'}
+};
+
+// configuracao display LCD
+int RS = 19;
+int E = 18;
+int D4 = 17;
+int D5 = 16;
+int D6 = 15;
+int D7 = 14;
+
+LiquidCrystal lcd(RS, E, D4, D5, D6, D7);
+
+// declaracao de variaveis globais
+char activeColumn = 0;
+char currentLine = NO_ACTIVE_LINE;
+char previousLine = NO_ACTIVE_LINE;
+char debouncedLine = NO_ACTIVE_LINE;
+
+// configuracao do timer1 para gerar uma interrupcao a cada 50ms
+void configuracao_Timer1(){
+    
+    // configura timer1 para operar no modo CTC (Clear Timer on Compare Match)
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCCR1B |= (1 << WGM12);
+    
+    // valor de comparacao que corresponde a 50ms considerando o prescaler de 1024 e clock de 16MHz
+    OCR1A = 781;
+    
+    // ativa interrupcao por comparacao com o registrador OCR1A
+    TIMSK1 |= (1 << OCIE1A);
+    
+    // configura o prescaler para 1024
+    TCCR1B |= (1 << CS12) | (1 << CS10);
+}
 /* Configuracao da comunicacao serial. */
 void setup(void)  {
   Serial.begin(9600); // Set baud rate

@@ -28,6 +28,22 @@ char keypad[ROWS][COLS] = {
   {'*', '0', '#'}
 };
 
+<<<<<<< HEAD
+*/
+#include <Arduino.h>
+#include <avr/interrupt.h>
+/* Create variables */
+int columns[3] = {1, 1, 1};
+int activeLine;
+int pressedKey;
+int flagKeyWasPressed = 0;
+int lines[4] = {1, 1, 1, 1};
+int state = 0;
+volatile unsigned long contador = 0; // Variável para contar os segundos
+int colunaAtiva;
+int linhaAtiva;
+int teclaConfimada;
+=======
 // configuracao display LCD
 int RS = 19;
 int E = 18;
@@ -62,11 +78,40 @@ void configuracao_Timer1(){
     TCCR1B |= (1 << CS12) | (1 << CS10);
 }
 
+>>>>>>> 1cbc88b1c2fd7f7185235772d223f059f19d7cf6
 void setup()
 {
+<<<<<<< HEAD
+    // Configura o temporizador Timer1
+    noInterrupts(); // Desabilita as interrupções
+    TCCR1A = 0; // Configura o Timer1 em modo normal
+    TCCR1B = (1 << WGM12) | (1 << CS11) | (1 << CS10); // Configura o prescaler em 64
+    OCR1A = 1249; // Define o valor de comparação para interrupção a cada 50ms
+    TIMSK1 = (1 << OCIE1A); // Habilita a interrupção do Timer1 no comparador A
+
+    Serial.begin(9600);
+
+    //Configuração entradas e saidas
+    pinMode(7, INPUT_PULLUP);
+    pinMode(8, INPUT_PULLUP);
+    pinMode(9, INPUT_PULLUP);
+    pinMode(10, INPUT_PULLUP);
+    pinMode(11, OUTPUT);
+    pinMode(12, OUTPUT);
+    pinMode(13, OUTPUT);
+=======
     // desabilita a flag global de interrupcao por precaucao
     cli();
+>>>>>>> 1cbc88b1c2fd7f7185235772d223f059f19d7cf6
 
+<<<<<<< HEAD
+    //Saidas em nivel logico alto
+    digitalWrite(11, HIGH);
+    digitalWrite(12, HIGH);
+    digitalWrite(13, HIGH);
+
+    interrupts(); // Habilita as interrupções
+=======
     Serial.begin(9600); // set baud rate to 9600 bps
     lcd.begin(16,2); // configura a instancia de lcd como 16x2
 
@@ -98,11 +143,51 @@ void setup()
     
     // habilita a flag global de interrupcao
     sei();
+>>>>>>> 1cbc88b1c2fd7f7185235772d223f059f19d7cf6
 }
 
+<<<<<<< HEAD
+
+// Rotina de interrupção do Timer1 (ocorre a cada segundo)
+ISR(TIMER1_COMPA_vect) {
+
+  contador++; // Incrementa o contador de segundos
+
+  // Coloque o código que deseja executar a cada segundo dentro desta função
+}
+
+void loop()
+{
+    switch (state)
+    { // state machine
+    case 0:
+        //coluna 1 em nivel logico 0v
+        digitalWrite(11, LOW);
+=======
 void loop() {
     /* Funcionamento do loop de varredura:
+>>>>>>> 1cbc88b1c2fd7f7185235772d223f059f19d7cf6
 
+<<<<<<< HEAD
+        //coluna 2 em nivel logico 5v
+        digitalWrite(12, HIGH);
+
+        //coluna3 em nivel logico 5v
+        digitalWrite(13, HIGH);
+
+
+        //Verifica tecla 1 pressionada
+        if (digitalRead(10) == 0)
+        {
+            Serial.println("apertou a tecla 1");
+
+            //salva tecla
+            colunaAtiva = 1;
+            linhaAtiva = 1;
+
+            //salta para o estado do debouncing
+            state = 3;
+=======
         A cada iteracao do loop uma coluna eh colocada em nivel baixo e as linhas sao varridas.
     O acionamento de uma tecla faz com que a linha feche contato com a coluna assim ela passa para
     nivel baixo, assim caso uma linha seja encontrada em nivel baixo esta é a linha acionada.
@@ -126,7 +211,204 @@ void loop() {
             
         } else if (row == ROWS - 1) {   // caso nao encontrou linha ativa ao final da varredura
             currentLine = NO_ACTIVE_LINE;
+>>>>>>> 1cbc88b1c2fd7f7185235772d223f059f19d7cf6
         }
+<<<<<<< HEAD
+
+        //Verifica tecla 4 pressionada
+        else if (digitalRead(9) == 0)
+        {
+            Serial.println("apertou a tecla 4");
+            //salva tecla
+            colunaAtiva = 1;
+            linhaAtiva = 2;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla 7 pressionada
+        else if (digitalRead(8) == 0)
+        {
+            Serial.println("apertou a tecla 7");
+            //salva tecla
+            colunaAtiva = 1;
+            linhaAtiva = 3;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla * pressionada
+        else if (digitalRead(7) == 0)
+        {
+            Serial.println("apertou a tecla *");
+            //salva tecla
+            colunaAtiva = 1;
+            linhaAtiva = 4;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+        else{
+            // salta para case 1
+            state = 1;
+        }
+        break;
+    case 1:
+        //coluna 1 em nivel logico 1
+        digitalWrite(11, HIGH);
+
+        //coluna 2 em nivel logico 0
+        digitalWrite(12, LOW);
+
+        //coluna3 em nivel logico 1
+        digitalWrite(13, HIGH);
+
+
+        //Verifica tecla 2 pressionada
+        if (digitalRead(10) == 0)
+        {
+            Serial.println("apertou a tecla 2");
+
+            //salva tecla
+            colunaAtiva = 2;
+            linhaAtiva = 1;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla 5 pressionada
+        else if (digitalRead(9) == 0)
+        {
+            Serial.println("apertou a tecla 5");
+            //salva tecla
+            colunaAtiva = 2;
+            linhaAtiva = 2;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla 8 pressionada
+        else if (digitalRead(8) == 0)
+        {
+            Serial.println("apertou a tecla 8");
+            //salva tecla
+            colunaAtiva = 2;
+            linhaAtiva = 3;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla 0 pressionada
+        else if (digitalRead(7) == 0)
+        {
+            Serial.println("apertou a tecla 0");
+            //salva tecla
+            colunaAtiva = 2;
+            linhaAtiva = 4;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+        else{
+            // salta para case 2
+            state = 2;
+        }
+        break;
+    case 2:
+        //coluna 1 em nivel logico 0v
+        digitalWrite(11, HIGH);
+
+        //coluna 2 em nivel logico 5v
+        digitalWrite(12, HIGH);
+
+        //coluna3 em nivel logico 5v
+        digitalWrite(13, LOW);
+
+
+        //Verifica tecla 3 pressionada
+        if (digitalRead(10) == 0)
+        {
+            Serial.println("apertou a tecla 3");
+
+            //salva tecla
+            colunaAtiva = 3;
+            linhaAtiva = 1;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla 6 pressionada
+        else if (digitalRead(9) == 0)
+        {
+            Serial.println("apertou a tecla 6");
+            //salva tecla
+            colunaAtiva = 3;
+            linhaAtiva = 2;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla 9 pressionada
+        else if (digitalRead(8) == 0)
+        {
+            Serial.println("apertou a tecla 9");
+            //salva tecla
+            colunaAtiva = 3;
+            linhaAtiva = 3;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+
+        //Verifica tecla # pressionada
+        else if (digitalRead(7) == 0)
+        {
+            Serial.println("apertou a tecla #");
+            //salva tecla
+            colunaAtiva = 3;
+            linhaAtiva = 4;
+
+            //salta para o estado do debouncing
+            state = 3;
+        }
+        else{
+            // salta para case 1
+            state = 1;
+        }
+        break;
+    //Deboucing tecla precionada
+    case 3:
+        // do something
+        break;
+    
+    //Confirma tecla precionada
+    case 4:
+        //Confirma tecla pressionada
+        teclaConfimada = 1;
+
+        //salta para o estado do debouncing tecla solta
+        state = 5;
+        break;
+    
+    //Deboucing tecla solta
+    case 5:
+        // do something
+        break;
+    case 6:
+        // do something
+        break;
+    case 7:
+        // do something
+        break;
+=======
+>>>>>>> 1cbc88b1c2fd7f7185235772d223f059f19d7cf6
     }
 
     digitalWrite(colPins[activeColumn], HIGH);  // coluna eh colocada em nivel alto

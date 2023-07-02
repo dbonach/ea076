@@ -16,7 +16,8 @@
 #define NO_ACTIVE_LINE 100
 #define TRUE 1
 #define FALSE 0
-#define EEPROM_ADDR 0x50  // Endereço da memória EEPROM 24C16
+#define EEPROM_ADDR 0x50  // endereço da memória EEPROM 24C16
+#define ADDRESS 32        // endereco PCF
 
 // arrays que mapeiam os pinos do arduino para as linhas e colunas do teclado
 const char rowPins[ROWS] = {2, 3, 4, 5};
@@ -30,12 +31,12 @@ char keypad[ROWS][COLS] = {
     {'*', '0', '#'}};
 
 // configuracao display LCD
-int RS = 19;
-int E = 18;
+int RS = 10;
+int E = 9;
 int D4 = 17;
 int D5 = 16;
 int D6 = 15;
-int D7 = 14;
+int D7 = 11;
 
 LiquidCrystal lcd(RS, E, D4, D5, D6, D7);
 
@@ -46,12 +47,22 @@ char previousLine = NO_ACTIVE_LINE;
 char debouncedLine = NO_ACTIVE_LINE;
 char pressedKey = NO_ACTIVE_LINE;
 char selectedComand = 0;
+char coleta = FALSE;
+int contadorMemoria = 0;
+// Definir o pino de entrada analógica onde o sensor está conectado
+const int pinoSensor = A0;
+int temp;
+float temperatura;
+char contadorInterrucao = 0;
+int availableSpace = 1023;
+char salveTemp = FALSE;
 
 void setup() {
     // desabilita a flag global de interrupcao por precaucao
     cli();
 
     Serial.begin(9600);  // set baud rate to 9600 bps
+    Wire.begin();        // Join I2C bus
     lcd.begin(16, 2);    // configura a instancia de lcd como 16x2
 
     // mapeamento dos pinos correspondentes a linha e colunas do teclado
@@ -75,10 +86,7 @@ void setup() {
     configuracao_Timer1();
 
     // exibe mensagem inicia no display LCD e no monitor serial
-    Serial.println("Waiting for key to be pressed.");
-    lcd.print("Waiting for key");
-    lcd.setCursor(0, 1);
-    lcd.print("to be pressed...");
+    showInDisplay("bem-vindo", "escolha funcao");
 
     // habilita a flag global de interrupcao
     sei();
@@ -101,45 +109,26 @@ void configuracao_Timer1() {
     TCCR1B |= (1 << CS12) | (1 << CS10);
 }
 
-void setup() {
-    // desabilita a flag global de interrupcao por precaucao
-    cli();
-
-    Serial.begin(9600);  // set baud rate to 9600 bps
-    lcd.begin(16, 2);    // configura a instancia de lcd como 16x2
-
-    // mapeamento dos pinos correspondentes a linha e colunas do teclado
-    // colunas sao configuradas como saida e linhas como entrada com pull-up
-    // o acionamento de uma tecla faz com que a linha correspondente seja colocada em nivel baixo
-    pinMode(2, INPUT_PULLUP);
-    pinMode(3, INPUT_PULLUP);
-    pinMode(4, INPUT_PULLUP);
-    pinMode(5, INPUT_PULLUP);
-    pinMode(6, OUTPUT);
-    pinMode(7, OUTPUT);
-    pinMode(8, OUTPUT);
-
-    // coloca as colunas em nivel alto
-    digitalWrite(6, HIGH);
-    digitalWrite(7, HIGH);
-    digitalWrite(8, HIGH);
-
-    /* configura o timer1 para gerar interrupcoes a cada 50ms
-       que serao utilizadas para validar o acionamento das teclas */
-    configuracao_Timer1();
-
-    // exibe mensagem inicia no display LCD e no monitor serial
-    Serial.println("Inicio o program...");
-    lcd.print("bem-vindo");
-    lcd.setCursor(0, 1);
-    lcd.print("escolha funcao");
-
-    // habilita a flag global de interrupcao
-    sei();
-}
-
 void loop() {
-    // menu
+    // Ler o valor analógico do sensor
+    int valorSensor = analogRead(pinoSensor);
+
+    // Converter o valor analógico para temperatura em graus Celsius
+    float tensao = valorSensor * (5.0 / 1023.0);  // Converter o valor para tensão (0-5V)
+    temperatura = tensao * 100;                   // Cada 10mV de variação corresponde a 1°C
+
+    // exibe temperatura no display 7 segmentos
+    sendRpmTo4DigitDisplay(temp);
+
+    if (salveTemp == TRUE) {
+        // escreve na memoria
+        escrever(contadorMemoria++, temp >> 8);
+        escrever(contadorMemoria++, temp);
+        Serial.println("tempe gravada: " + String(temp));
+        salveTemp = FALSE;
+    }
+
+    // Menu
     switch (pressedKey) {
         case '1':
             showInDisplay("1 - reset", "confirmar?");
@@ -184,19 +173,19 @@ void loop() {
 void executeComand() {
     switch (selectedComand) {
         case 1:
-
+            resetMemory();
             break;
         case 2:
-
+            memoryStatus();
             break;
         case 3:
-
+            startColect();
             break;
         case 4:
-
+            finishColect();
             break;
         case 5:
-
+            transferData();
             break;
     }
 }
@@ -266,14 +255,24 @@ ISR(TIMER1_COMPA_vect) {
             // as linhas eram nulas e debouncedLine indica que ja foi feito o debounce de acionamento, logo o ciclo foi completo
         } else if (currentLine == NO_ACTIVE_LINE && debouncedLine != NO_ACTIVE_LINE) {
             pressedKey = keypad[debouncedLine][activeColumn];
-            Serial.println("Pressed key: " + String(pressedKey), "");
-            showInDisplay("Pressed key: " + String(pressedKey), "");
-
             debouncedLine = NO_ACTIVE_LINE;
         }
     }
 
     previousLine = currentLine;
+
+    contadorInterrucao++;
+
+    if (contadorInterrucao == 40) {
+        // converte temperatura float para int
+        temp = int(temperatura * 100);
+
+        if (coleta == TRUE) {
+            salveTemp = TRUE;
+        }
+
+        contadorInterrucao = 0;
+    }
 }
 
 // atualiza coluna sendo varrida, variando de 0 a 2
@@ -310,6 +309,7 @@ void escrever(unsigned int add, unsigned char dado) {
     Wire.write(byteLstAdd);
     Wire.write(dado);
     Wire.endTransmission();
+    delay(5);
 }
 
 unsigned char ler(unsigned int add) {
@@ -333,26 +333,120 @@ unsigned char ler(unsigned int add) {
 
     return data;
 }
+
 void resetMemory(void) {
-    // Escreve 11111111 nos dois ultimos enderecos da memoria
-    escrever(0x7FF, 0xFF);
-    escrever(0x7FE, 0xFF);  // verificar se pode escrita seguida
+    // zera o contador de memoria
+    escrever(0x7FF, 0x00);
+    escrever(0x7FE, 0x00);
+
+    showInDisplay("reset concluido", "");
 }
 
 // exibe valor do contador da memoria
-
-void statusMemory(void) {
+void memoryStatus(void) {
     // Le penultimo endereco
     unsigned char contLSB = ler(0x7FE);
+
+    Serial.println("Contador memory LSB: " + String(contLSB, HEX));
 
     // Le ultimo endereco
     unsigned char contMSB = ler(0x7FF);
 
+    Serial.println("Contador memory MSB: " + String(contMSB, HEX));
+
     // Atribuição de uma mascara para juntar os bits do contador
-    int contador = (contMSB << 8) | contLSB;
+    contadorMemoria = (contMSB << 8) | contLSB;
+
+    Serial.println("Contador memory: " + String(contadorMemoria));
 
     // Numero memorias livres
-    int freeMemory = 2048 - contador;
+    int freeMemory = availableSpace - contadorMemoria / 2;
 
-    showInDisplay("gravado: " + String(contador), "disponivel: " + String(freeMemory));
+    showInDisplay("gravado: " + String(contadorMemoria), "disponivel: " + String(freeMemory));
+}
+
+// Habilita a flag coleta
+void startColect(void) {
+    showInDisplay("start", "inicio da coleta");
+    coleta = TRUE;
+}
+
+// Finaliza a coleta
+void finishColect(void) {
+    showInDisplay("stop: fim", "no dados: " + String(contadorMemoria / 2));
+    coleta = FALSE;
+}
+
+void transferData(void) {
+    showInDisplay("transf. dados", "esc. qtde:");
+
+    String input = "";
+
+    while (true) {
+        varreduraDoTeclado();
+
+        if (pressedKey != NO_ACTIVE_LINE) {
+            if (pressedKey == '*') {
+                break;
+            }
+
+            if (pressedKey == '#') {
+                if (contadorMemoria < input.toInt()) {
+                    showInDisplay("quantidade", "indisponivel");
+                }
+
+                for (int i = 0; i < input.toInt() * 2; i += 2) {
+                    unsigned char msbByte = ler(i);
+                    unsigned char lsbByte = ler(i + 1);
+
+                    int value = (msbByte << 8) | lsbByte;
+
+                    Serial.println("Valor: " + String(value));
+                }
+
+                showInDisplay("transf. concluida", "");
+                break;
+            }
+
+            input += String(pressedKey);
+            pressedKey = NO_ACTIVE_LINE;
+
+            showInDisplay("transf. dados", "esc. qtde: " + input);
+        }
+    }
+}
+
+/* Send temperature to 4-digit display */
+void sendRpmTo4DigitDisplay(int number) {
+    encodeDigit3(number / 1000);
+    encodeDigit2(number % 1000 / 100);
+    encodeDigit1(number % 1000 % 100 / 10);
+    encodeDigit0(number % 1000 % 100 % 10);
+}
+
+/* Encode units (less valuable) */
+void encodeDigit0(int number) {
+    sendDigit(112 | number);  // 1110000 OR number
+}
+
+/* Encode tens */
+void encodeDigit1(int number) {
+    sendDigit(176 | number);  // 11010000 OR number
+}
+
+/* Encode hundreds */
+void encodeDigit2(int number) {
+    sendDigit(208 | number);  // 10110000 OR number
+}
+
+/* Encode thousands (more valuable) */
+void encodeDigit3(int number) {
+    sendDigit(224 | number);  // 01110000 OR number
+}
+
+/* Send encoded values through I2C bus */
+void sendDigit(int value) {
+    Wire.beginTransmission(ADDRESS);  // Inicio de transmissao entre o arduino e o PCF de endereco 0100000b
+    Wire.write(value);                // Prepara os bits (value) a serem transmitidos
+    Wire.endTransmission();           // Realiza a transmissao do dado
 }
